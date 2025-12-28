@@ -1,7 +1,7 @@
 require('dotenv').config()
 const express = require('express')
 const cors = require('cors')
-const { MongoClient, ServerApiVersion } = require('mongodb')
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb')
 const admin = require('firebase-admin')
 const port = process.env.PORT || 3000
 const decoded = Buffer.from(process.env.FB_SERVICE_KEY, 'base64').toString(
@@ -65,11 +65,92 @@ app.post('/tickets', async(req,res)=> {
     res.send(result);
 })
 
-//ticket get api
+//all tickets get api
 app.get('/tickets', async(req,res)=>{
-    const result = await ticketsCollection.find().toArray();
+    const result = await ticketsCollection.find({isVisible: true}).toArray();
     res.send(result);
 })
+
+//requested ticket get api
+app.get('/my-tickets/:email', async(req,res)=>{
+    const email = req.params.email;
+    const result = await ticketsCollection.find({'vendor.email': email}).toArray();
+    res.send(result);
+})
+
+//update ticket status api
+app.patch('/tickets/approve/:id', async(req,res)=>{
+  const id = req.params.id;
+  const filter = {_id: new ObjectId(id)};
+  const updateStatus = {
+    $set: {
+      status: 'approved'
+    },
+  };
+  const result = await ticketsCollection.updateOne(filter, updateStatus);
+  res.send(result);
+})
+
+app.patch('/tickets/reject/:id', async(req,res)=>{
+  const id = req.params.id;
+  const filter = {_id: new ObjectId(id)};
+  const updateStatus = {
+    $set: {
+      status: 'rejected'
+    }
+  }
+  const result = await ticketsCollection.updateOne(filter, updateStatus);
+  res.send(result);
+})
+
+//get all approved tickets api
+app.get('/approved-tickets', async(req,res)=>{
+ const result = await ticketsCollection.find({status: 'approved'}).toArray();
+ res.send(result);
+})
+
+//get single ticket api
+app.get('/tickets/:id', async(req,res)=>{
+  const id = req.params.id;
+  const filter = {_id: new ObjectId(id)};
+  const result = await ticketsCollection.findOne(filter);
+  res.send(result);
+})
+
+// Advertise ticket API (safe & optimized)
+app.patch('/advertise-tickets/:id', async (req, res) => {
+  const { id } = req.params;
+  const { isAdvertised } = req.body;
+
+  if (typeof isAdvertised !== 'boolean') {
+    return res.status(400).send({ message: 'Invalid advertise value' });
+  }
+
+  // Limit only when trying to advertise
+  if (isAdvertised === true) {
+    const advertisedCount = await ticketsCollection.countDocuments({
+      isAdvertised: true
+    });
+
+    if (advertisedCount >= 6) {
+      return res.status(400).send({
+        message: 'Maximum 6 tickets can be advertised at a time.'
+      });
+    }
+  }
+
+  const result = await ticketsCollection.updateOne(
+    { _id: new ObjectId(id) },
+    { $set: { isAdvertised } }
+  );
+
+  res.send(result);
+});
+
+
+
+
+
 
 
 
